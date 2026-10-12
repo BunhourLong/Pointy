@@ -20,6 +20,9 @@ export interface AppDeps {
   filter: OneEuroFilter;
   indexTip: number;
   handLostMs: number;
+  /** On a spoken "stop", drop the last N ms of the stroke (speech latency overshoot). */
+  stopTrimMs: number;
+  width: { min: number; max: number; step: number };
 }
 
 /** Owns the lifecycle and the rAF detection/render loop. */
@@ -34,6 +37,8 @@ export class App {
   private fps = 0;
   private fpsFrames = 0;
   private fpsSince = 0;
+  private mic = 'off';
+  private lastCommand = '';
 
   constructor(deps: AppDeps) {
     this.d = deps;
@@ -57,6 +62,7 @@ export class App {
         this.d.pen.lost();
       }),
       bus.on('command', (c) => this.onCommand(c)),
+      bus.on('voice:status', (s) => (this.mic = s)),
     ];
     this.raf = requestAnimationFrame(this.tick);
   }
@@ -90,15 +96,23 @@ export class App {
       penDown: pen.state !== 'idle',
       penColor: store.color,
     });
-    this.d.overlay.update({ fps: this.fps, hand: this.handVisible, pen: pen.state });
+    this.d.overlay.update({
+      fps: this.fps,
+      hand: this.handVisible,
+      pen: pen.state,
+      mic: this.mic,
+      command: this.lastCommand,
+    });
   };
 
   private onCommand(c: Command): void {
-    const { pen, store } = this.d;
+    const { pen, store, width } = this.d;
+    this.lastCommand = c.type === 'color' ? `color ${c.color}` : c.type;
     switch (c.type) {
       case 'draw':
         return pen.down();
       case 'stop':
+        if (pen.state !== 'idle') store.trimRecent(this.d.stopTrimMs);
         return pen.up();
       case 'toggle':
         return pen.state === 'idle' ? pen.down() : pen.up();
@@ -106,6 +120,15 @@ export class App {
         return store.clear();
       case 'undo':
         return store.undo();
+      case 'color':
+        store.color = c.color;
+        return;
+      case 'thicker':
+        store.width = Math.min(width.max, store.width + width.step);
+        return;
+      case 'thinner':
+        store.width = Math.max(width.min, store.width - width.step);
+        return;
     }
   }
 

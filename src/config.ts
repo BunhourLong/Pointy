@@ -30,7 +30,8 @@ export const config = {
   cursor: { radius: 8, upColor: 'rgba(255, 255, 255, 0.9)' },
   voice: {
     lang: 'en-US',
-    debounceMs: 800,
+    /** Delay before restarting recognition after an error (e.g. `network`). */
+    errorRestartMs: 1000,
     /** On "stop", drop points drawn in the last N ms (speech latency overshoot). */
     stopTrimMs: 300,
     keywords: {

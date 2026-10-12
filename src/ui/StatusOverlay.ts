@@ -2,6 +2,9 @@ export interface Status {
   fps: number;
   hand: boolean;
   pen: string;
+  mic: string;
+  /** Last command received, if any. */
+  command: string;
 }
 
 export class StatusOverlay {
@@ -12,8 +15,10 @@ export class StatusOverlay {
     this.el = el;
   }
 
-  update({ fps, hand, pen }: Status): void {
-    const text = `${fps.toFixed(0).padStart(2)} fps · hand ${hand ? '✓' : '✗'} · pen ${pen}`;
+  update({ fps, hand, pen, mic, command }: Status): void {
+    const text =
+      `${fps.toFixed(0).padStart(2)} fps · hand ${hand ? '✓' : '✗'} · pen ${pen} · mic ${mic}` +
+      (command ? ` · “${command}”` : '');
     if (text === this.last) return; // avoid touching the DOM every frame
     this.last = text;
     this.el.textContent = text;

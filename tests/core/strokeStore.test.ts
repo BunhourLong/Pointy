@@ -75,4 +75,39 @@ describe('StrokeStore', () => {
 
     expect(seen).toEqual([0, 0, 1, 1, 2, 3]);
   });
+
+  it('trimRecent drops the open stroke points from the last N ms', () => {
+    let now = 0;
+    const store = new StrokeStore('#f00', 6, () => now);
+    store.start(a);
+    now = 100;
+    store.append(b);
+    now = 200;
+    store.append(c);
+    now = 250;
+
+    store.trimRecent(100); // drops points newer than t=150
+
+    expect(store.current?.points).toEqual([a, b]);
+  });
+
+  it('trimRecent keeps the first point so a quick draw/stop still leaves a dot', () => {
+    const store = new StrokeStore('#f00', 6, () => 0);
+    store.start(a);
+    store.append(b);
+
+    store.trimRecent(300);
+
+    expect(store.current?.points).toEqual([a]);
+  });
+
+  it('trimRecent leaves committed strokes alone', () => {
+    const store = new StrokeStore('#f00', 6, () => 0);
+    store.start(a);
+    store.end();
+
+    store.trimRecent(300);
+
+    expect(store.strokes.map((s) => s.points)).toEqual([[a]]);
+  });
 });
