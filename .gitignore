@@ -30,3 +30,6 @@ npm-debug.log*
 *.md
 
 !README.md
+!GOAL.md
+!PLAN.md
+!CLAUDE.md
