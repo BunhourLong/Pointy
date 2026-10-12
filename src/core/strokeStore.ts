@@ -51,7 +51,12 @@ export class StrokeStore {
   }
 
   clear(): void {
-    this.strokes.length = 0;
+    this.load([]);
+  }
+
+  /** Replaces everything, e.g. with a saved drawing. */
+  load(strokes: readonly Stroke[]): void {
+    this.strokes.splice(0, this.strokes.length, ...strokes);
     this.current = null;
     this.version++;
   }

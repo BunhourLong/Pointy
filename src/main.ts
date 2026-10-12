@@ -9,12 +9,16 @@ import { PenStateMachine } from './core/penStateMachine';
 import { OneEuroFilter } from './core/smoothing/oneEuroFilter';
 import { StrokeStore } from './core/strokeStore';
 import type { AppEvents } from './core/types';
+import { PngExporter } from './export/PngExporter';
 import { Webcam } from './input/camera/webcam';
 import { KeyboardInput } from './input/keyboard/KeyboardInput';
 import { MediaPipeHandTracker } from './input/tracking/MediaPipeHandTracker';
 import { WebSpeechVoiceInput } from './input/voice/WebSpeechVoiceInput';
 import { CanvasRenderer } from './render/CanvasRenderer';
+import { drawStroke } from './render/drawStroke';
+import { LocalStorageRepository } from './storage/LocalStorageRepository';
 import { Controls } from './ui/Controls';
+import { Onboarding } from './ui/Onboarding';
 import { StatusOverlay } from './ui/StatusOverlay';
 
 // Composition root: the only place that constructs concrete classes.
@@ -24,7 +28,16 @@ const overlay = new StatusOverlay($('status'));
 const bus = new EventBus<AppEvents>();
 const store = new StrokeStore(config.pen.color, config.pen.width);
 const keyboard = new KeyboardInput(bus);
-const controls = new Controls($('controls'), bus);
+const onboarding = new Onboarding($('onboarding'), config.storage.onboardedKey);
+const exporter = new PngExporter(drawStroke);
+const controls = new Controls($('controls'), bus, {
+  colors: config.pen.colors,
+  color: store.color,
+  width: { min: config.pen.minWidth, max: config.pen.maxWidth, value: store.width },
+  exportPng: () => exporter.export(store.strokes, video.videoWidth, video.videoHeight),
+  onHelp: () => onboarding.show(),
+});
+onboarding.showFirstTime();
 
 // Voice: full interim transcript → commands not emitted yet → bus.
 const voice = new WebSpeechVoiceInput(config.voice);
@@ -68,6 +81,8 @@ const app = new App({
   handLostMs: config.handLostMs,
   stopTrimMs: config.voice.stopTrimMs,
   width: { min: config.pen.minWidth, max: config.pen.maxWidth, step: config.pen.widthStep },
+  repo: new LocalStorageRepository(config.storage.prefix),
+  drawingName: config.storage.lastDrawing,
 });
 
 overlay.update({ fps: 0, hand: false, pen: 'loading…', mic: 'off', command: '' });
@@ -87,5 +102,6 @@ window.addEventListener('pagehide', () => {
   keyboard.dispose();
   voice.dispose();
   controls.dispose();
+  onboarding.dispose();
   app.dispose();
 });

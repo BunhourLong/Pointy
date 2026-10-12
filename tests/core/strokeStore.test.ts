@@ -110,4 +110,18 @@ describe('StrokeStore', () => {
 
     expect(store.strokes.map((s) => s.points)).toEqual([[a]]);
   });
+
+  it('load replaces all strokes and bumps version', () => {
+    const store = new StrokeStore('#f00', 6);
+    store.start(a);
+    store.end();
+    store.start(b);
+    const saved = [{ points: [c], color: '#00f', width: 3 }];
+
+    store.load(saved);
+
+    expect(store.strokes).toEqual(saved);
+    expect(store.current).toBeNull();
+    expect(store.version).toBe(2);
+  });
 });

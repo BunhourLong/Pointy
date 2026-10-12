@@ -22,6 +22,7 @@ export class KeyboardInput {
 
   private onKeyDown = (e: KeyboardEvent): void => {
     if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return; // leave browser shortcuts alone
+    if (e.target instanceof Element && e.target.closest('dialog')) return; // e.g. Space on a dialog button
     const command = KEYS[e.code];
     if (!command) return;
     e.preventDefault(); // Space would scroll / press a focused button

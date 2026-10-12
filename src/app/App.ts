@@ -7,6 +7,7 @@ import type { AppEvents, Command, InputMode, Point } from '@/core/types';
 import type { Webcam } from '@/input/camera/webcam';
 import type { HandTracker } from '@/input/tracking/HandTracker';
 import type { Renderer } from '@/render/Renderer';
+import type { DrawingRepository } from '@/storage/DrawingRepository';
 import type { StatusOverlay } from '@/ui/StatusOverlay';
 
 export interface AppDeps {
@@ -25,6 +26,9 @@ export interface AppDeps {
   /** On a spoken "stop", drop the last N ms of the stroke (speech latency overshoot). */
   stopTrimMs: number;
   width: { min: number; max: number; step: number };
+  repo: DrawingRepository;
+  /** Name the drawing is auto-saved under and restored from. */
+  drawingName: string;
 }
 
 /** Owns the lifecycle and the rAF detection/render loop. */
@@ -43,14 +47,21 @@ export class App {
   private lastCommand = '';
   private mode: InputMode = 'voice';
   private aspect = 1;
+  private savedVersion = 0;
 
   constructor(deps: AppDeps) {
     this.d = deps;
   }
 
   async start(): Promise<void> {
-    const { bus, webcam, tracker, video } = this.d;
-    await Promise.all([webcam.start(), tracker.init()]);
+    const { bus, webcam, tracker, video, repo, store } = this.d;
+    const [saved] = await Promise.all([
+      repo.load(this.d.drawingName),
+      webcam.start(),
+      tracker.init(),
+    ]);
+    if (saved) store.load(saved.strokes);
+    this.savedVersion = store.version;
     this.aspect = video.videoWidth / video.videoHeight;
     video.parentElement?.style.setProperty('--ar', String(this.aspect));
 
@@ -99,6 +110,7 @@ export class App {
       this.detect(now);
     }
     const { store, pen } = this.d;
+    if (store.version !== this.savedVersion) this.save();
     this.d.renderer.render({
       strokes: store.strokes,
       version: store.version,
@@ -118,7 +130,8 @@ export class App {
 
   private onCommand(c: Command): void {
     const { pen, store, width } = this.d;
-    this.lastCommand = c.type === 'color' ? `color ${c.color}` : c.type;
+    this.lastCommand =
+      c.type === 'color' ? `color ${c.color}` : c.type === 'width' ? `width ${c.width}` : c.type;
     switch (c.type) {
       case 'draw':
         return pen.down();
@@ -132,15 +145,29 @@ export class App {
       case 'undo':
         return store.undo();
       case 'color':
-        store.color = c.color;
-        return;
+        return this.setStyle(c.color, store.width);
+      case 'width':
+        return this.setStyle(store.color, c.width);
       case 'thicker':
-        store.width = Math.min(width.max, store.width + width.step);
-        return;
+        return this.setStyle(store.color, store.width + width.step);
       case 'thinner':
-        store.width = Math.max(width.min, store.width - width.step);
-        return;
+        return this.setStyle(store.color, store.width - width.step);
     }
+  }
+
+  private setStyle(color: string, w: number): void {
+    const { store, width } = this.d;
+    store.color = color;
+    store.width = Math.min(width.max, Math.max(width.min, w));
+    this.d.bus.emit('pen:style', { color: store.color, width: store.width });
+  }
+
+  private save(): void {
+    const { repo, store, drawingName } = this.d;
+    this.savedVersion = store.version;
+    repo
+      .save(drawingName, { strokes: store.strokes })
+      .catch((err: unknown) => console.warn('Could not save drawing:', err));
   }
 
   private applyPinch(pinched: boolean): void {

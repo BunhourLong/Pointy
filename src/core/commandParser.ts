@@ -1,6 +1,9 @@
 import type { Command } from './types';
 
-type SimpleCommand = Exclude<Command, { type: 'color' } | { type: 'toggle' }>['type'];
+type SimpleCommand = Exclude<
+  Command,
+  { type: 'color' } | { type: 'width' } | { type: 'toggle' }
+>['type'];
 
 export interface Vocabulary {
   keywords: Readonly<Record<SimpleCommand, readonly string[]>>;

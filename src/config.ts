@@ -48,7 +48,12 @@ export const config = {
   defaultMode: 'voice' as InputMode,
   /** Pinch distance / hand size (wrist → middle MCP). Hysteresis: on < off. */
   pinch: { onRatio: 0.35, offRatio: 0.5 },
-  storageKey: 'pointy:last-drawing',
+  storage: {
+    prefix: 'pointy:drawing:',
+    /** The drawing auto-saved on every change and restored on load. */
+    lastDrawing: 'last',
+    onboardedKey: 'pointy:onboarded',
+  },
 } as const;
 
 export type Config = typeof config;

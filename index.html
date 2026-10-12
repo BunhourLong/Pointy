@@ -19,7 +19,63 @@
         <label><input type="radio" name="mode" value="voice" checked /> Voice</label>
         <label><input type="radio" name="mode" value="pinch" /> Pinch</label>
       </fieldset>
+      <fieldset id="colors" class="segmented swatches">
+        <legend>Pen color</legend>
+      </fieldset>
+      <label class="width">
+        <span class="visually-hidden">Pen width</span>
+        <input type="range" name="width" />
+      </label>
+      <button type="button" data-action="export">Save PNG</button>
+      <button type="button" data-action="help" aria-label="Help">?</button>
     </form>
+    <dialog id="onboarding" class="onboarding" aria-labelledby="onboarding-title">
+      <h1 id="onboarding-title">Draw in the air with your finger</h1>
+      <ol>
+        <li>Allow the <b>camera</b> and <b>microphone</b> when Chrome asks.</li>
+        <li>Hold up one hand. A ring follows your <b>index fingertip</b>.</li>
+        <li>Say <b>“draw”</b> to put the pen down, then move your finger.</li>
+        <li>Say <b>“stop”</b> to lift the pen. Move somewhere else and say “draw” again.</li>
+      </ol>
+      <table>
+        <caption>
+          Voice commands
+        </caption>
+        <tbody>
+          <tr>
+            <th scope="row">draw · go · start</th>
+            <td>Pen down</td>
+          </tr>
+          <tr>
+            <th scope="row">stop · up</th>
+            <td>Pen up</td>
+          </tr>
+          <tr>
+            <th scope="row">undo · clear</th>
+            <td>Remove last line · erase everything</td>
+          </tr>
+          <tr>
+            <th scope="row">red · blue · green · black · white</th>
+            <td>Pen color</td>
+          </tr>
+          <tr>
+            <th scope="row">thicker · thinner</th>
+            <td>Pen width</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        <b>No mic or a noisy room?</b> Switch to <b>Pinch</b> (top right): touch your thumb and
+        index finger together to draw, open them to stop.
+      </p>
+      <p class="hint">
+        Keyboard: Space = draw/stop, Z = undo, C = clear. Voice needs Chrome or Edge and an internet
+        connection. Your drawing is saved in this browser.
+      </p>
+      <form method="dialog">
+        <button autofocus>Start drawing</button>
+      </form>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

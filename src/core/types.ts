@@ -27,6 +27,7 @@ export type Command =
   | { type: 'clear' }
   | { type: 'undo' }
   | { type: 'color'; color: string }
+  | { type: 'width'; width: number }
   | { type: 'thicker' }
   | { type: 'thinner' };
 
@@ -41,6 +42,8 @@ export interface AppEvents {
   command: Command;
   'voice:status': VoiceStatus;
   mode: InputMode;
+  /** Pen color/width changed (by any input), so UI can reflect it. */
+  'pen:style': { color: string; width: number };
 }
 
 export interface Drawing {
