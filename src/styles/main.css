@@ -51,7 +51,8 @@ body {
   border-radius: 6px;
   background: rgb(0 0 0 / 0.6);
   font-variant-numeric: tabular-nums;
-  white-space: pre;
+  white-space: pre-wrap;
+  max-width: min(560px, calc(100vw - 32px));
 }
 
 .status.error {

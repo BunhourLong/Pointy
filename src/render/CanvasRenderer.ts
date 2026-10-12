@@ -1,11 +1,14 @@
 import type { Point } from '@/core/types';
 import { toCanvas } from './coords';
 import { drawStroke } from './drawStroke';
-import type { Renderer, Scene } from './Renderer';
+import type { Rect, Renderer, Scene } from './Renderer';
 
 export interface CanvasRendererOptions {
   cursorRadius: number;
   cursorUpColor: string;
+  /** Fraction of the canvas height. */
+  eraserRadius: number;
+  trash: Rect;
 }
 
 /** Two layers: `committed` (finished strokes) and `live` (current stroke + cursor). */
@@ -39,7 +42,8 @@ export class CanvasRenderer implements Renderer {
     }
     this.live.clearRect(0, 0, this.width, this.height);
     if (scene.current) drawStroke(this.live, scene.current, this.width, this.height);
-    if (scene.cursor) this.drawCursor(scene.cursor, scene.penDown, scene.penColor);
+    if (scene.holding) this.drawTrash(scene.overTrash);
+    if (scene.cursor) this.drawCursor(scene.cursor, scene);
   }
 
   dispose(): void {
@@ -58,19 +62,48 @@ export class CanvasRenderer implements Renderer {
     this.drawnVersion = -1; // resizing wiped the committed layer
   }
 
-  private drawCursor(p: Point, penDown: boolean, penColor: string): void {
+  private drawCursor(p: Point, { tool, penDown, penColor, holding }: Scene): void {
     const ctx = this.live;
     const { x, y } = toCanvas(p, this.width, this.height);
+    const { cursorRadius, cursorUpColor, eraserRadius } = this.options;
     ctx.beginPath();
-    ctx.arc(x, y, this.options.cursorRadius, 0, Math.PI * 2);
-    if (penDown) {
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = cursorUpColor;
+    ctx.fillStyle = cursorUpColor;
+    if (tool === 'eraser') {
+      ctx.arc(x, y, eraserRadius * this.height, 0, Math.PI * 2);
+      ctx.setLineDash([6, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (tool === 'grab') {
+      ctx.arc(x, y, cursorRadius * 1.5, 0, Math.PI * 2);
+      if (holding) ctx.fill();
+      else ctx.stroke();
+    } else if (penDown) {
+      ctx.arc(x, y, cursorRadius, 0, Math.PI * 2);
       ctx.fillStyle = penColor;
       ctx.fill();
     } else {
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = this.options.cursorUpColor;
+      ctx.arc(x, y, cursorRadius, 0, Math.PI * 2);
       ctx.stroke();
     }
+  }
+
+  private drawTrash(hot: boolean): void {
+    const ctx = this.live;
+    const { x, y, w, h } = this.options.trash;
+    const [px, py, pw, ph] = [x * this.width, y * this.height, w * this.width, h * this.height];
+    ctx.beginPath();
+    ctx.roundRect(px, py, pw, ph, 12);
+    ctx.fillStyle = hot ? 'rgba(255, 59, 48, 0.6)' : 'rgba(0, 0, 0, 0.5)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = hot ? '#ff3b30' : 'rgba(255, 255, 255, 0.6)';
+    ctx.stroke();
+    ctx.font = `${Math.round(ph * 0.45)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🗑️', px + pw / 2, py + ph / 2);
   }
 }
 

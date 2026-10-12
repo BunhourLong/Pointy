@@ -17,7 +17,7 @@
       <fieldset class="segmented">
         <legend>Pen control</legend>
         <label><input type="radio" name="mode" value="voice" checked /> Voice</label>
-        <label><input type="radio" name="mode" value="pinch" /> Pinch</label>
+        <label><input type="radio" name="mode" value="hand" /> Hand</label>
       </fieldset>
       <fieldset id="colors" class="segmented swatches">
         <legend>Pen color</legend>
@@ -32,22 +32,40 @@
     <dialog id="onboarding" class="onboarding" aria-labelledby="onboarding-title">
       <h1 id="onboarding-title">Draw in the air with your finger</h1>
       <ol>
-        <li>Allow the <b>camera</b> and <b>microphone</b> when Chrome asks.</li>
+        <li>Allow the <b>camera</b> and <b>microphone</b> when the browser asks.</li>
         <li>Hold up one hand. A ring follows your <b>index fingertip</b>.</li>
         <li>Say <b>“draw”</b> to put the pen down, then move your finger.</li>
         <li>Say <b>“stop”</b> to lift the pen. Move somewhere else and say “draw” again.</li>
       </ol>
       <table>
         <caption>
+          Hand gestures (any mode)
+        </caption>
+        <tbody>
+          <tr>
+            <th scope="row">✊ Fist</th>
+            <td>Eraser: rub over lines to erase them</td>
+          </tr>
+          <tr>
+            <th scope="row">👌 Pinch</th>
+            <td>
+              Thumb on index, other fingers open: grab a drawing and move it. Let go over the 🗑️
+              corner to delete it.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <table>
+        <caption>
           Voice commands
         </caption>
         <tbody>
           <tr>
-            <th scope="row">draw · go · start</th>
+            <th scope="row">draw · go · start · down</th>
             <td>Pen down</td>
           </tr>
           <tr>
-            <th scope="row">stop · up</th>
+            <th scope="row">stop · up · end · done</th>
             <td>Pen up</td>
           </tr>
           <tr>
@@ -65,12 +83,13 @@
         </tbody>
       </table>
       <p>
-        <b>No mic or a noisy room?</b> Switch to <b>Pinch</b> (top right): touch your thumb and
-        index finger together to draw, open them to stop.
+        <b>No mic or a noisy room?</b> Switch to <b>Hand</b> (top right): ☝️ point with just your
+        index finger to draw, 🖐 open your hand to stop.
       </p>
       <p class="hint">
-        Keyboard: Space = draw/stop, Z = undo, C = clear. Voice needs Chrome or Edge and an internet
-        connection. Your drawing is saved in this browser.
+        The status bar (top left) shows what the mic heard. Keyboard: Space = draw/stop, Z = undo, C
+        = clear. Voice runs offline in your browser; the first visit downloads a ~40 MB voice model.
+        Your drawing is saved in this browser.
       </p>
       <form method="dialog">
         <button autofocus>Start drawing</button>

@@ -25,3 +25,8 @@ export function parseCommands(text: string, vocab: Vocabulary): Command[] {
   }
   return commands;
 }
+
+/** Every word `parseCommands` reacts to, e.g. to restrict a recognizer's grammar. */
+export function commandWords(vocab: Vocabulary): string[] {
+  return [...new Set([...Object.values(vocab.keywords).flat(), ...Object.keys(vocab.colors)])];
+}

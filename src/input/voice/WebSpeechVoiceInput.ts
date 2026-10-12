@@ -83,22 +83,25 @@ export class WebSpeechVoiceInput implements VoiceInput {
   private begin(): void {
     try {
       this.rec?.start();
-    } catch {
-      // InvalidStateError: already running. Nothing to do.
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'InvalidStateError') return; // already running
+      console.warn('Speech recognition could not start:', err);
+      this.statusCb('error');
     }
   }
 
   private onError(error: string): void {
-    if (error === 'no-speech' || error === 'aborted') return; // normal; onend restarts
+    if (error === 'aborted') return; // we stopped it
     console.warn('Speech recognition error:', error);
+    // Silence is normal, but if it keeps happening while you talk, the mic isn't reaching Chrome.
+    if (error === 'no-speech') return this.statusCb('no-speech'); // onend restarts
     if (FATAL_ERRORS.includes(error)) {
       this.wanted = false;
       this.denied = true;
-      this.statusCb('denied');
-    } else {
-      this.failed = true;
-      this.statusCb('error');
+      return this.statusCb('denied');
     }
+    this.failed = true;
+    this.statusCb(error === 'network' ? 'network' : error === 'audio-capture' ? 'no-mic' : 'error');
   }
 
   /** Chrome ends continuous recognition on its own (silence, ~1 min, errors): restart. */

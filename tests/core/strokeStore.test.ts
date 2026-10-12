@@ -124,4 +124,78 @@ describe('StrokeStore', () => {
     expect(store.current).toBeNull();
     expect(store.version).toBe(2);
   });
+
+  describe('erase', () => {
+    const line = (y: number) => [0.1, 0.2, 0.3, 0.4, 0.5].map((x) => ({ x, y }));
+
+    it('cuts the erased points out, splitting the line in two', () => {
+      const store = new StrokeStore('#f00', 6);
+      store.load([{ points: line(0.5), color: '#00f', width: 3 }]);
+
+      store.erase({ x: 0.3, y: 0.5 }, 0.05);
+
+      expect(store.strokes).toEqual([
+        { points: line(0.5).slice(0, 2), color: '#00f', width: 3 },
+        { points: line(0.5).slice(3), color: '#00f', width: 3 },
+      ]);
+    });
+
+    it('removes a line it covers completely and leaves far lines alone', () => {
+      const store = new StrokeStore('#f00', 6);
+      const far = { points: line(0.9), color: '#f00', width: 6 };
+      store.load([{ points: [a], color: '#f00', width: 6 }, far]);
+
+      store.erase(a, 0.05);
+
+      expect(store.strokes).toEqual([far]);
+    });
+
+    it('bumps version only when something was erased', () => {
+      const store = new StrokeStore('#f00', 6);
+      store.load([{ points: line(0.5), color: '#f00', width: 6 }]);
+      const before = store.version;
+
+      store.erase({ x: 0.3, y: 0.9 }, 0.05);
+      expect(store.version).toBe(before);
+      store.erase({ x: 0.3, y: 0.5 }, 0.05);
+      expect(store.version).toBe(before + 1);
+    });
+
+    it('measures the radius in true proportions on a wide frame', () => {
+      const store = new StrokeStore('#f00', 6);
+      store.load([{ points: [{ x: 0.34, y: 0.5 }], color: '#f00', width: 6 }]);
+
+      // 0.04 apart horizontally = 0.071 frame heights at 16:9: outside a 0.05 radius.
+      store.erase({ x: 0.3, y: 0.5 }, 0.05, 16 / 9);
+
+      expect(store.strokes).toHaveLength(1);
+    });
+  });
+
+  describe('strokesAt', () => {
+    const stroke = (...points: { x: number; y: number }[]) => ({ points, color: '#f00', width: 6 });
+    // A "face": a box outline with an eye inside it, plus a separate drawing far away.
+    const face = stroke(
+      { x: 0.2, y: 0.2 },
+      { x: 0.4, y: 0.2 },
+      { x: 0.4, y: 0.4 },
+      { x: 0.2, y: 0.4 },
+    );
+    const eye = stroke({ x: 0.25, y: 0.25 }, { x: 0.27, y: 0.25 });
+    const far = stroke({ x: 0.8, y: 0.8 }, { x: 0.9, y: 0.9 });
+
+    it('returns the line under the point with every line overlapping it', () => {
+      const store = new StrokeStore('#f00', 6);
+      store.load([face, eye, far]);
+
+      expect(store.strokesAt({ x: 0.41, y: 0.3 }, 0.05)).toEqual([face, eye]);
+    });
+
+    it('returns nothing when no line is within the radius', () => {
+      const store = new StrokeStore('#f00', 6);
+      store.load([face, eye, far]);
+
+      expect(store.strokesAt({ x: 0.6, y: 0.6 }, 0.05)).toEqual([]);
+    });
+  });
 });

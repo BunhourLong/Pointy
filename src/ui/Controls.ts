@@ -47,7 +47,7 @@ export class Controls {
     ];
   }
 
-  /** Voice can't work here (unsupported or mic denied): lock the toggle to pinch. */
+  /** Voice can't work here (unsupported or mic denied): lock the toggle to hand mode. */
   disableVoice(reason: string): void {
     const voice = this.input('mode', 'voice');
     voice.disabled = true;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCommands } from '@/core/commandParser';
+import { commandWords, parseCommands } from '@/core/commandParser';
 
 const vocab = {
   keywords: {
@@ -38,5 +38,26 @@ describe('parseCommands', () => {
 
   it('returns an empty list for no text', () => {
     expect(parseCommands('', vocab)).toEqual([]);
+  });
+});
+
+describe('commandWords', () => {
+  it('lists every word the parser reacts to, once each', () => {
+    const words = commandWords({ ...vocab, colors: { red: '#f00', blue: '#00f', stop: '#000' } });
+    expect(words.sort()).toEqual(
+      [
+        'blue',
+        'clear',
+        'draw',
+        'go',
+        'red',
+        'start',
+        'stop',
+        'thicker',
+        'thinner',
+        'undo',
+        'up',
+      ].sort(),
+    );
   });
 });

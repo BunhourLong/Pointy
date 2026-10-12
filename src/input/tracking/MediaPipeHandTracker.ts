@@ -29,8 +29,15 @@ export class MediaPipeHandTracker implements HandTracker {
   }
 
   detect(video: HTMLVideoElement, timestamp: number): HandFrame | null {
-    const hand = this.landmarker?.detectForVideo(video, timestamp).landmarks[0];
-    return hand ? { landmarks: hand.map(({ x, y }) => ({ x, y })), timestamp } : null;
+    const result = this.landmarker?.detectForVideo(video, timestamp);
+    const hand = result?.landmarks[0];
+    const world = result?.worldLandmarks[0];
+    if (!hand || !world) return null;
+    return {
+      landmarks: hand.map(({ x, y }) => ({ x, y })),
+      world: world.map(({ x, y, z }) => ({ x, y, z })),
+      timestamp,
+    };
   }
 
   dispose(): void {

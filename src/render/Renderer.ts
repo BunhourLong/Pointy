@@ -6,8 +6,21 @@ export interface Scene {
   version: number;
   current: Stroke | null;
   cursor: Point | null;
+  /** What the hand is doing: pen (up/down), erasing (fist), or grabbing (pinch). */
+  tool: 'pen' | 'eraser' | 'grab';
   penDown: boolean;
   penColor: string;
+  /** A grabbed drawing is being carried; `overTrash` = releasing now deletes it. */
+  holding: boolean;
+  overTrash: boolean;
+}
+
+/** Normalized screen-space (as seen, mirrored) rectangle. */
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export interface Renderer {

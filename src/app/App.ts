@@ -1,12 +1,14 @@
 import type { EventBus } from '@/core/events';
-import type { PinchDetector } from '@/core/gestures/pinchDetector';
+import type { HandPoseDetector } from '@/core/gestures/handPose';
 import type { PenStateMachine } from '@/core/penStateMachine';
 import type { OneEuroFilter } from '@/core/smoothing/oneEuroFilter';
+import type { StrokeGrabber } from '@/core/strokeGrabber';
 import type { StrokeStore } from '@/core/strokeStore';
-import type { AppEvents, Command, InputMode, Point } from '@/core/types';
+import type { AppEvents, Command, HandFrame, HandPose, InputMode, Point } from '@/core/types';
 import type { Webcam } from '@/input/camera/webcam';
 import type { HandTracker } from '@/input/tracking/HandTracker';
-import type { Renderer } from '@/render/Renderer';
+import { toCanvas } from '@/render/coords';
+import type { Rect, Renderer } from '@/render/Renderer';
 import type { DrawingRepository } from '@/storage/DrawingRepository';
 import type { StatusOverlay } from '@/ui/StatusOverlay';
 
@@ -20,8 +22,15 @@ export interface AppDeps {
   store: StrokeStore;
   pen: PenStateMachine;
   filter: OneEuroFilter;
-  pinch: PinchDetector;
-  indexTip: number;
+  poses: HandPoseDetector;
+  grabber: StrokeGrabber;
+  /** Landmarks averaged into the cursor for each pose. */
+  anchors: Readonly<Record<HandPose, readonly number[]>>;
+  /** Leaving the draw pose drops the stroke's last N ms (the finger moves while curling). */
+  releaseTrimMs: number;
+  /** Fraction of the frame height. */
+  eraserRadius: number;
+  trash: Rect;
   handLostMs: number;
   /** On a spoken "stop", drop the last N ms of the stroke (speech latency overshoot). */
   stopTrimMs: number;
@@ -29,6 +38,7 @@ export interface AppDeps {
   repo: DrawingRepository;
   /** Name the drawing is auto-saved under and restored from. */
   drawingName: string;
+  saveThrottleMs: number;
 }
 
 /** Owns the lifecycle and the rAF detection/render loop. */
@@ -40,6 +50,7 @@ export class App {
   private lastSeen = 0;
   private handVisible = false;
   private cursor: Point | null = null;
+  private pose: HandPose = 'open';
   private fps = 0;
   private fpsFrames = 0;
   private fpsSince = 0;
@@ -48,6 +59,7 @@ export class App {
   private mode: InputMode = 'voice';
   private aspect = 1;
   private savedVersion = 0;
+  private savedAt = 0;
 
   constructor(deps: AppDeps) {
     this.d = deps;
@@ -66,24 +78,23 @@ export class App {
     video.parentElement?.style.setProperty('--ar', String(this.aspect));
 
     this.unsubscribe = [
-      bus.on('hand:frame', (f) => {
-        const tip = f.landmarks[this.d.indexTip];
-        if (!tip) return;
-        if (this.mode === 'pinch') this.applyPinch(this.d.pinch.update(f.landmarks, this.aspect));
-        this.cursor = this.d.filter.filter(tip, f.timestamp);
-        this.d.pen.move(this.cursor);
-      }),
+      bus.on('hand:frame', (f) => this.onFrame(f)),
       bus.on('hand:lost', () => {
+        const { pen, filter, grabber, poses } = this.d;
+        grabber.release(false);
+        // Hand mode: the pose is unknown until the hand is back, so lift the pen.
+        if (this.mode === 'hand') pen.up();
+        else pen.lost();
         this.cursor = null;
-        this.d.filter.reset();
-        this.d.pen.lost();
+        this.pose = 'open';
+        filter.reset();
+        poses.reset();
       }),
       bus.on('command', (c) => this.onCommand(c)),
       bus.on('voice:status', (s) => (this.mic = s)),
       bus.on('mode', (m) => {
         this.mode = m;
         this.d.pen.up();
-        this.d.pinch.reset();
       }),
     ];
     this.raf = requestAnimationFrame(this.tick);
@@ -110,18 +121,23 @@ export class App {
       this.detect(now);
     }
     const { store, pen } = this.d;
-    if (store.version !== this.savedVersion) this.save();
+    if (store.version !== this.savedVersion && now - this.savedAt > this.d.saveThrottleMs) {
+      this.save(now);
+    }
     this.d.renderer.render({
       strokes: store.strokes,
       version: store.version,
       current: store.current,
       cursor: this.cursor,
+      tool: this.pose === 'fist' ? 'eraser' : this.pose === 'pinch' ? 'grab' : 'pen',
       penDown: pen.state !== 'idle',
       penColor: store.color,
+      holding: this.d.grabber.holding,
+      overTrash: this.overTrash(),
     });
     this.d.overlay.update({
       fps: this.fps,
-      hand: this.handVisible,
+      hand: this.handVisible ? this.pose : '✗',
       pen: pen.state,
       mic: this.mic,
       command: this.lastCommand,
@@ -162,18 +178,49 @@ export class App {
     this.d.bus.emit('pen:style', { color: store.color, width: store.width });
   }
 
-  private save(): void {
+  private save(now: number): void {
     const { repo, store, drawingName } = this.d;
     this.savedVersion = store.version;
+    this.savedAt = now;
     repo
       .save(drawingName, { strokes: store.strokes })
       .catch((err: unknown) => console.warn('Could not save drawing:', err));
   }
 
-  private applyPinch(pinched: boolean): void {
-    const { pen } = this.d;
-    if (pinched && pen.state === 'idle') pen.down();
-    else if (!pinched && pen.state !== 'idle') pen.up();
+  /** point/open move the pen, fist erases, pinch grabs. Hand mode: point = pen down. */
+  private onFrame(f: HandFrame): void {
+    const { poses, filter, pen, store, grabber, anchors } = this.d;
+    const pose = poses.update(f.world);
+    const prev = this.pose;
+    if (pose !== prev) {
+      if (prev === 'pinch') grabber.release(this.overTrash()); // where the pinch was, before the cursor moves
+      const keepsPen = pose === 'point' || (pose === 'open' && this.mode === 'voice');
+      if (!keepsPen && pen.state !== 'idle') {
+        store.trimRecent(this.d.releaseTrimMs);
+        pen.up();
+      }
+      if (anchors[prev].join() !== anchors[pose].join()) filter.reset(); // don't glide between landmarks
+      this.pose = pose;
+    }
+    const anchor = average(anchors[pose].map((i) => f.landmarks[i]));
+    if (!anchor) return;
+    this.cursor = filter.filter(anchor, f.timestamp);
+
+    if (pose === 'fist') return store.erase(this.cursor, this.d.eraserRadius, this.aspect);
+    if (pose === 'pinch') {
+      if (pose !== prev) grabber.grab(this.cursor, this.aspect);
+      else grabber.drag(this.cursor);
+      return;
+    }
+    if (this.mode === 'hand' && pose === 'point') pen.down();
+    pen.move(this.cursor);
+  }
+
+  private overTrash(): boolean {
+    if (!this.d.grabber.holding || !this.cursor) return false;
+    const { x, y } = toCanvas(this.cursor, 1, 1); // normalized screen space
+    const t = this.d.trash;
+    return x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h;
   }
 
   private detect(now: number): void {
@@ -199,4 +246,13 @@ export class App {
       this.fpsSince = now;
     }
   }
+}
+
+function average(points: (Point | undefined)[]): Point | null {
+  if (!points.length || points.some((p) => !p)) return null;
+  const sum = (points as Point[]).reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), {
+    x: 0,
+    y: 0,
+  });
+  return { x: sum.x / points.length, y: sum.y / points.length };
 }

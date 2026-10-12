@@ -10,9 +10,18 @@ export interface Stroke {
   width: number;
 }
 
-/** One tracked hand: 21 normalized landmarks (MediaPipe order). */
+export interface Vec3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** One tracked hand: 21 landmarks (MediaPipe order). */
 export interface HandFrame {
+  /** Normalized 0–1 image coordinates. */
   landmarks: Point[];
+  /** Metric 3D coordinates around the hand's center: rotation-robust, for pose detection. */
+  world: Vec3[];
   /** ms, monotonically increasing (performance.now()). */
   timestamp: number;
 }
@@ -31,10 +40,28 @@ export type Command =
   | { type: 'thicker' }
   | { type: 'thinner' };
 
-/** Who controls the pen: voice commands or the thumb–index pinch. */
-export type InputMode = 'voice' | 'pinch';
+/** point = index only extended; pinch = thumb on index, other fingers open (👌). */
+export type HandPose = 'open' | 'point' | 'fist' | 'pinch';
 
-export type VoiceStatus = 'listening' | 'stopped' | 'unsupported' | 'denied' | 'error';
+/** Who controls the pen: voice commands or the hand pose (point = draw). */
+export type InputMode = 'voice' | 'hand';
+
+export type VoiceStatus =
+  /** Downloading / starting the recognizer. */
+  | 'loading'
+  | 'listening'
+  /** Ready, but the browser needs a click on the page before audio can run. */
+  | 'suspended'
+  | 'stopped'
+  | 'unsupported'
+  | 'denied'
+  | 'error'
+  /** Recognizer heard no speech for a while (silence, muted or wrong mic). */
+  | 'no-speech'
+  /** No microphone could be opened. */
+  | 'no-mic'
+  /** Speech service or model download unreachable. */
+  | 'network';
 
 export interface AppEvents {
   'hand:frame': HandFrame;
