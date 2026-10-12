@@ -1,2 +1,72 @@
-// Phase 2.
-export {};
+import type { Point } from '@/core/types';
+import { toCanvas } from './coords';
+import type { Renderer, Scene } from './Renderer';
+
+export interface CanvasRendererOptions {
+  cursorRadius: number;
+  cursorUpColor: string;
+}
+
+/** Two layers: `committed` (finished strokes) and `live` (current stroke + cursor). */
+export class CanvasRenderer implements Renderer {
+  private readonly committed: CanvasRenderingContext2D;
+  private readonly live: CanvasRenderingContext2D;
+  private readonly options: CanvasRendererOptions;
+  private readonly resizeObserver: ResizeObserver;
+  private width = 0;
+  private height = 0;
+
+  constructor(
+    committed: HTMLCanvasElement,
+    live: HTMLCanvasElement,
+    options: CanvasRendererOptions,
+  ) {
+    this.committed = getContext(committed);
+    this.live = getContext(live);
+    this.options = options;
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(live);
+  }
+
+  render(scene: Scene): void {
+    const ctx = this.live;
+    ctx.clearRect(0, 0, this.width, this.height);
+    if (scene.cursor) this.drawCursor(scene.cursor, scene.penDown, scene.penColor);
+  }
+
+  dispose(): void {
+    this.resizeObserver.disconnect();
+  }
+
+  private resize(): void {
+    const dpr = window.devicePixelRatio || 1;
+    this.width = this.live.canvas.clientWidth;
+    this.height = this.live.canvas.clientHeight;
+    for (const ctx of [this.committed, this.live]) {
+      ctx.canvas.width = Math.round(this.width * dpr);
+      ctx.canvas.height = Math.round(this.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw in CSS px
+    }
+  }
+
+  private drawCursor(p: Point, penDown: boolean, penColor: string): void {
+    const ctx = this.live;
+    const { x, y } = toCanvas(p, this.width, this.height);
+    ctx.beginPath();
+    ctx.arc(x, y, this.options.cursorRadius, 0, Math.PI * 2);
+    if (penDown) {
+      ctx.fillStyle = penColor;
+      ctx.fill();
+    } else {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = this.options.cursorUpColor;
+      ctx.stroke();
+    }
+  }
+}
+
+function getContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D is not supported');
+  return ctx;
+}
