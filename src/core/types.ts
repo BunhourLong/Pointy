@@ -30,6 +30,9 @@ export type Command =
   | { type: 'thicker' }
   | { type: 'thinner' };
 
+/** Who controls the pen: voice commands or the thumb–index pinch. */
+export type InputMode = 'voice' | 'pinch';
+
 export type VoiceStatus = 'listening' | 'stopped' | 'unsupported' | 'denied' | 'error';
 
 export interface AppEvents {
@@ -37,6 +40,7 @@ export interface AppEvents {
   'hand:lost': { timestamp: number };
   command: Command;
   'voice:status': VoiceStatus;
+  mode: InputMode;
 }
 
 export interface Drawing {

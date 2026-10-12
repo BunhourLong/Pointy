@@ -59,3 +59,53 @@ body {
   white-space: normal;
   max-width: calc(100vw - 32px);
 }
+
+.controls {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.segmented {
+  display: flex;
+  margin: 0;
+  padding: 2px;
+  border: 0;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.6);
+}
+
+.segmented legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.segmented label {
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.segmented input {
+  position: absolute;
+  opacity: 0;
+}
+
+.segmented label:has(:checked) {
+  background: rgb(255 255 255 / 0.2);
+}
+
+.segmented label:has(:focus-visible) {
+  outline: 2px solid #0a84ff;
+}
+
+.segmented label:has(:disabled) {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

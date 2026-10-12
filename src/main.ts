@@ -4,6 +4,7 @@ import { config } from './config';
 import { CommandDebouncer } from './core/commandDebouncer';
 import { parseCommands } from './core/commandParser';
 import { EventBus } from './core/events';
+import { PinchDetector } from './core/gestures/pinchDetector';
 import { PenStateMachine } from './core/penStateMachine';
 import { OneEuroFilter } from './core/smoothing/oneEuroFilter';
 import { StrokeStore } from './core/strokeStore';
@@ -13,6 +14,7 @@ import { KeyboardInput } from './input/keyboard/KeyboardInput';
 import { MediaPipeHandTracker } from './input/tracking/MediaPipeHandTracker';
 import { WebSpeechVoiceInput } from './input/voice/WebSpeechVoiceInput';
 import { CanvasRenderer } from './render/CanvasRenderer';
+import { Controls } from './ui/Controls';
 import { StatusOverlay } from './ui/StatusOverlay';
 
 // Composition root: the only place that constructs concrete classes.
@@ -22,6 +24,7 @@ const overlay = new StatusOverlay($('status'));
 const bus = new EventBus<AppEvents>();
 const store = new StrokeStore(config.pen.color, config.pen.width);
 const keyboard = new KeyboardInput(bus);
+const controls = new Controls($('controls'), bus);
 
 // Voice: full interim transcript → commands not emitted yet → bus.
 const voice = new WebSpeechVoiceInput(config.voice);
@@ -33,6 +36,18 @@ voice.onStatus((status) => {
 });
 voice.onTranscript((text) => {
   for (const command of debouncer.update(parseCommands(text, vocab))) bus.emit('command', command);
+});
+bus.on('mode', (mode) => (mode === 'voice' ? voice.start() : voice.stop()));
+// No usable speech recognition: fall back to pinch.
+bus.on('voice:status', (status) => {
+  if (status !== 'unsupported' && status !== 'denied') return;
+  controls.disableVoice(
+    status === 'denied'
+      ? 'Microphone access was blocked'
+      : 'Speech recognition needs Chrome or Edge',
+  );
+  // Deferred: 'unsupported' fires inside voice.start(), i.e. mid-way through a 'mode' emit.
+  queueMicrotask(() => bus.emit('mode', 'pinch'));
 });
 
 const app = new App({
@@ -48,6 +63,7 @@ const app = new App({
   store,
   pen: new PenStateMachine(store),
   filter: new OneEuroFilter(config.smoothing),
+  pinch: new PinchDetector({ ...config.pinch, ...config.landmarks }),
   indexTip: config.landmarks.indexTip,
   handLostMs: config.handLostMs,
   stopTrimMs: config.voice.stopTrimMs,
@@ -57,7 +73,7 @@ const app = new App({
 overlay.update({ fps: 0, hand: false, pen: 'loading…', mic: 'off', command: '' });
 app
   .start()
-  .then(() => voice.start())
+  .then(() => bus.emit('mode', config.defaultMode))
   .catch((err: unknown) => {
     console.error(err);
     const name = err instanceof DOMException ? err.name : '';
@@ -70,5 +86,6 @@ app
 window.addEventListener('pagehide', () => {
   keyboard.dispose();
   voice.dispose();
+  controls.dispose();
   app.dispose();
 });

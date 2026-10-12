@@ -13,6 +13,13 @@
       <canvas id="live"></canvas>
     </main>
     <div id="status" class="status">Pointy</div>
+    <form id="controls" class="controls">
+      <fieldset class="segmented">
+        <legend>Pen control</legend>
+        <label><input type="radio" name="mode" value="voice" checked /> Voice</label>
+        <label><input type="radio" name="mode" value="pinch" /> Pinch</label>
+      </fieldset>
+    </form>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

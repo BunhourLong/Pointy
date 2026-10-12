@@ -1,3 +1,5 @@
+import type { InputMode } from './core/types';
+
 // Every tunable lives here. Modules receive these values via constructor args from main.ts.
 export const config = {
   mediapipe: {
@@ -43,6 +45,7 @@ export const config = {
       thinner: ['thinner'],
     },
   },
+  defaultMode: 'voice' as InputMode,
   /** Pinch distance / hand size (wrist → middle MCP). Hysteresis: on < off. */
   pinch: { onRatio: 0.35, offRatio: 0.5 },
   storageKey: 'pointy:last-drawing',

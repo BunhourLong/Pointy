@@ -1,8 +1,9 @@
 import type { EventBus } from '@/core/events';
+import type { PinchDetector } from '@/core/gestures/pinchDetector';
 import type { PenStateMachine } from '@/core/penStateMachine';
 import type { OneEuroFilter } from '@/core/smoothing/oneEuroFilter';
 import type { StrokeStore } from '@/core/strokeStore';
-import type { AppEvents, Command, Point } from '@/core/types';
+import type { AppEvents, Command, InputMode, Point } from '@/core/types';
 import type { Webcam } from '@/input/camera/webcam';
 import type { HandTracker } from '@/input/tracking/HandTracker';
 import type { Renderer } from '@/render/Renderer';
@@ -18,6 +19,7 @@ export interface AppDeps {
   store: StrokeStore;
   pen: PenStateMachine;
   filter: OneEuroFilter;
+  pinch: PinchDetector;
   indexTip: number;
   handLostMs: number;
   /** On a spoken "stop", drop the last N ms of the stroke (speech latency overshoot). */
@@ -39,6 +41,8 @@ export class App {
   private fpsSince = 0;
   private mic = 'off';
   private lastCommand = '';
+  private mode: InputMode = 'voice';
+  private aspect = 1;
 
   constructor(deps: AppDeps) {
     this.d = deps;
@@ -47,12 +51,14 @@ export class App {
   async start(): Promise<void> {
     const { bus, webcam, tracker, video } = this.d;
     await Promise.all([webcam.start(), tracker.init()]);
-    video.parentElement?.style.setProperty('--ar', String(video.videoWidth / video.videoHeight));
+    this.aspect = video.videoWidth / video.videoHeight;
+    video.parentElement?.style.setProperty('--ar', String(this.aspect));
 
     this.unsubscribe = [
       bus.on('hand:frame', (f) => {
         const tip = f.landmarks[this.d.indexTip];
         if (!tip) return;
+        if (this.mode === 'pinch') this.applyPinch(this.d.pinch.update(f.landmarks, this.aspect));
         this.cursor = this.d.filter.filter(tip, f.timestamp);
         this.d.pen.move(this.cursor);
       }),
@@ -63,6 +69,11 @@ export class App {
       }),
       bus.on('command', (c) => this.onCommand(c)),
       bus.on('voice:status', (s) => (this.mic = s)),
+      bus.on('mode', (m) => {
+        this.mode = m;
+        this.d.pen.up();
+        this.d.pinch.reset();
+      }),
     ];
     this.raf = requestAnimationFrame(this.tick);
   }
@@ -130,6 +141,12 @@ export class App {
         store.width = Math.max(width.min, store.width - width.step);
         return;
     }
+  }
+
+  private applyPinch(pinched: boolean): void {
+    const { pen } = this.d;
+    if (pinched && pen.state === 'idle') pen.down();
+    else if (!pinched && pen.state !== 'idle') pen.up();
   }
 
   private detect(now: number): void {
