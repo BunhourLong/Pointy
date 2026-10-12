@@ -1,0 +1,61 @@
+:root {
+  color-scheme: dark;
+  --bg: #111;
+  --fg: #eee;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font:
+    14px/1.4 system-ui,
+    sans-serif;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+/* Stage matches the video's aspect ratio so landmarks map 1:1 onto it. */
+.stage {
+  --ar: 1.7778;
+  position: relative;
+  aspect-ratio: var(--ar);
+  width: min(100vw, 100vh * var(--ar));
+  background: #000;
+}
+
+.stage > video,
+.stage > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.stage > video {
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.status {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.6);
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+}
+
+.status.error {
+  background: #8b1a1a;
+  white-space: normal;
+  max-width: calc(100vw - 32px);
+}
