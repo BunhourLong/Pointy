@@ -1,4 +1,4 @@
-import type { Point } from '@/core/types';
+import type { Point, Stroke } from '@/core/types';
 import { toCanvas } from './coords';
 import type { Renderer, Scene } from './Renderer';
 
@@ -15,6 +15,8 @@ export class CanvasRenderer implements Renderer {
   private readonly resizeObserver: ResizeObserver;
   private width = 0;
   private height = 0;
+  /** Version of the strokes last drawn on the committed layer; -1 forces a redraw. */
+  private drawnVersion = -1;
 
   constructor(
     committed: HTMLCanvasElement,
@@ -29,8 +31,13 @@ export class CanvasRenderer implements Renderer {
   }
 
   render(scene: Scene): void {
-    const ctx = this.live;
-    ctx.clearRect(0, 0, this.width, this.height);
+    if (scene.version !== this.drawnVersion) {
+      this.drawnVersion = scene.version;
+      this.committed.clearRect(0, 0, this.width, this.height);
+      scene.strokes.forEach((s) => this.drawStroke(this.committed, s));
+    }
+    this.live.clearRect(0, 0, this.width, this.height);
+    if (scene.current) this.drawStroke(this.live, scene.current);
     if (scene.cursor) this.drawCursor(scene.cursor, scene.penDown, scene.penColor);
   }
 
@@ -46,7 +53,29 @@ export class CanvasRenderer implements Renderer {
       ctx.canvas.width = Math.round(this.width * dpr);
       ctx.canvas.height = Math.round(this.height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw in CSS px
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
     }
+    this.drawnVersion = -1; // resizing wiped the committed layer
+  }
+
+  /** Quadratic curves through the midpoints of consecutive points. */
+  private drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke): void {
+    const pts = stroke.points.map((p) => toCanvas(p, this.width, this.height));
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    if (!first || !last) return;
+    ctx.strokeStyle = stroke.color;
+    ctx.lineWidth = stroke.width;
+    ctx.beginPath();
+    ctx.moveTo(first.x, first.y);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const p = pts[i]!;
+      const next = pts[i + 1]!;
+      ctx.quadraticCurveTo(p.x, p.y, (p.x + next.x) / 2, (p.y + next.y) / 2);
+    }
+    ctx.lineTo(last.x, last.y); // a single point draws a round dot
+    ctx.stroke();
   }
 
   private drawCursor(p: Point, penDown: boolean, penColor: string): void {

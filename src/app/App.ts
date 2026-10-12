@@ -1,5 +1,8 @@
 import type { EventBus } from '@/core/events';
-import type { AppEvents, Point } from '@/core/types';
+import type { PenStateMachine } from '@/core/penStateMachine';
+import type { OneEuroFilter } from '@/core/smoothing/oneEuroFilter';
+import type { StrokeStore } from '@/core/strokeStore';
+import type { AppEvents, Command, Point } from '@/core/types';
 import type { Webcam } from '@/input/camera/webcam';
 import type { HandTracker } from '@/input/tracking/HandTracker';
 import type { Renderer } from '@/render/Renderer';
@@ -12,6 +15,9 @@ export interface AppDeps {
   bus: EventBus<AppEvents>;
   renderer: Renderer;
   overlay: StatusOverlay;
+  store: StrokeStore;
+  pen: PenStateMachine;
+  filter: OneEuroFilter;
   indexTip: number;
   handLostMs: number;
 }
@@ -40,11 +46,17 @@ export class App {
 
     this.unsubscribe = [
       bus.on('hand:frame', (f) => {
-        this.cursor = f.landmarks[this.d.indexTip] ?? null;
+        const tip = f.landmarks[this.d.indexTip];
+        if (!tip) return;
+        this.cursor = this.d.filter.filter(tip, f.timestamp);
+        this.d.pen.move(this.cursor);
       }),
       bus.on('hand:lost', () => {
         this.cursor = null;
+        this.d.filter.reset();
+        this.d.pen.lost();
       }),
+      bus.on('command', (c) => this.onCommand(c)),
     ];
     this.raf = requestAnimationFrame(this.tick);
   }
@@ -69,16 +81,33 @@ export class App {
       this.lastVideoTime = video.currentTime;
       this.detect(now);
     }
+    const { store, pen } = this.d;
     this.d.renderer.render({
-      strokes: [],
-      version: 0,
-      current: null,
+      strokes: store.strokes,
+      version: store.version,
+      current: store.current,
       cursor: this.cursor,
-      penDown: false,
-      penColor: '',
+      penDown: pen.state !== 'idle',
+      penColor: store.color,
     });
-    this.d.overlay.update({ fps: this.fps, hand: this.handVisible, pen: 'idle' });
+    this.d.overlay.update({ fps: this.fps, hand: this.handVisible, pen: pen.state });
   };
+
+  private onCommand(c: Command): void {
+    const { pen, store } = this.d;
+    switch (c.type) {
+      case 'draw':
+        return pen.down();
+      case 'stop':
+        return pen.up();
+      case 'toggle':
+        return pen.state === 'idle' ? pen.down() : pen.up();
+      case 'clear':
+        return store.clear();
+      case 'undo':
+        return store.undo();
+    }
+  }
 
   private detect(now: number): void {
     const { bus, tracker, video, handLostMs } = this.d;
