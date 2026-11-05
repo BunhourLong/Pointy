@@ -33,3 +33,10 @@ npm-debug.log*
 !GOAL.md
 !PLAN.md
 !CLAUDE.md
+!AGENTS.md
+!.opencode/**/*.md
+
+# opencode local state
+scan/
+.review/
+.preview/

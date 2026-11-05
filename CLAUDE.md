@@ -88,9 +88,9 @@ tests/                          # mirrors src/core
 - **Cleanup:** every adapter has `dispose()` that stops tracks, closes the recognizer, and removes listeners.
 
 ## Skills (required for all code implementation)
-- **`tdd`**: every code implementation is test-first (red → green, one vertical slice at a time). Write the failing Vitest test, then the minimal code to pass it. Installed globally at `~/.claude/skills/tdd`.
+- **`tdd`**: every code implementation is test-first (red → green, one vertical slice at a time). Write the failing Vitest test, then the minimal code to pass it. If no `tdd` skill is installed for the current tool, apply this rule inline.
 - **`ponytail`**: when implementing code, always take the simplest solution that works. YAGNI, standard library and platform features before custom code or new dependencies.
-- Invoke both skills via the Skill tool before writing implementation code.
+- Invoke `ponytail` via the Skill tool before writing implementation code. There is no `tdd` skill installed; the test-first rule is applied inline.
 
 ## Project memory
 - Read `MEMORY.md` at the start of every session for context carried across sessions.
@@ -115,3 +115,12 @@ tests/                          # mirrors src/core
 - Manual testing in **Chrome or Edge** (Firefox has no Web Speech recognition).
 - Chrome speech recognition needs internet.
 - `core/` must reach high test coverage. Adapters are tested manually.
+
+## Workflow (opencode — GLM 5.3 Flash only)
+- Every seat — orchestrator and subagents — runs `opencode/glm-5.3-flash-free`. No other model; it is free, so verification fan-out costs nothing, not context: each session has a hard 200k cap.
+- Sessions stay small by design: one job each, pass paths and frozen diffs, never file contents. Subagents provide the parallelism; they never carry chat history.
+- Subagents in `.opencode/agents/`: `scout` (context), `builder` (TDD implementer), `reviewer`, `pentester`, `quality`, `test-auditor` (review battery). Commands in `.opencode/command/`: `/implement`, `/fix`, `/review`, `/tests`, `/phase` — each encodes the pipeline: deterministic checks first (`npm run check`), frozen diff, battery dispatch, severity triage (escalate, never downgrade a security finding), max 2 review cycles.
+- Subagents spawn through `scripts/battery.sh <agent> <prompt-file>` so each job **streams live in a cmux split beside the session** (the split opens once the run produces a session id, and the split plus the per-job server close when the script exits). Outside cmux the job still runs, unseen. Prompt files live in `scan/prompts/`.
+- Cross-tool project rules: `AGENTS.md` at the repo root; global coding principles in `~/.agents/AGENTS.md` (symlinked into `~/.config/opencode/AGENTS.md`, imported by `~/.claude/CLAUDE.md`).
+- Skills load from `~/.claude/skills/` (ponytail, security-audit, …); invoke via the Skill tool in Claude Code sessions, and let subagents read the SKILL.md files directly.
+- **graphify is not used in this project.**

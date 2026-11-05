@@ -1,0 +1,17 @@
+---
+description: Run the four-lens review battery on the current diff only.
+---
+
+Review the current work in Pointy. $ARGUMENTS optionally narrows the focus.
+
+- Diff source: `git diff` vs HEAD by default; use the staged diff if `--staged` appears in $ARGUMENTS, or if the unstaged diff is empty and staged changes exist.
+- Run the `scout` through the runner first only if you need context to frame the review.
+- Run the Protocol below, steps 1-6 only. This command implements nothing: no plan, no `builder` dispatch. Triage is still applied; findings and their disposition go to the user.
+
+## Protocol
+1. Deterministic first: run `npm run check`; nothing goes under model review until it is green. Fix failures from the diff first.
+2. Freeze evidence ONCE: capture `git diff` output (uncommitted work is the norm here) + file list; pass the SAME diff to every reviewer.
+3. Dispatch through the visible runner, one job at a time: write the lens brief to `scan/prompts/<agent>.md`, then run `bash scripts/battery.sh <agent> scan/prompts/<agent>.md` from the repo root. Each job opens a cmux split beside the session, streams live, and closes itself when done; outside cmux it still runs, unseen. Battery = `reviewer` + `pentester` + `quality` + `test-auditor` on the frozen diff; `scout` when context is missing.
+4. Triage: dedupe by path:line; lens severity is authoritative (escalate but never downgrade). Critical/high + all security findings: must fix. Medium: fix or justify in the report. Low: log or accept.
+5. Fix + re-run `npm run check` + affected scoped tests; one delta re-review round by only the affected lens. Max 2 review cycles, then stop and report to the user.
+6. Context discipline: keep this session small — pass paths and diffs, not file contents; total context target < 60k per task.
