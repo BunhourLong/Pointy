@@ -2,7 +2,14 @@ import type { Command } from './types';
 
 type SimpleCommand = Exclude<
   Command,
-  { type: 'color' } | { type: 'width' } | { type: 'toggle' }
+  | { type: 'color' }
+  | { type: 'width' }
+  | { type: 'toggle' }
+  | { type: 'shape' }
+  | { type: 'move' }
+  | { type: 'resize' }
+  | { type: 'recolor' }
+  | { type: 'remove' }
 >['type'];
 
 export interface Vocabulary {

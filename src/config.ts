@@ -83,6 +83,7 @@ export const config = {
       thinner: ['thinner', 'smaller'],
     },
   },
+  ai: { edgeStep: 0.02 }, // max segment length between shape edge points (fractions of frame)
   defaultMode: 'voice' as InputMode,
   storage: {
     prefix: 'pointy:drawing:',

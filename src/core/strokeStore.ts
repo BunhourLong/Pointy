@@ -44,6 +44,12 @@ export class StrokeStore {
     this.version++;
   }
 
+  /** Adds a pre-built stroke as committed (shapes, saved drawings). */
+  add(stroke: Stroke): void {
+    this.strokes.push(stroke);
+    this.version++;
+  }
+
   /** Discards the open stroke if there is one, otherwise the last committed stroke. */
   undo(): void {
     if (this.current) this.current = null;

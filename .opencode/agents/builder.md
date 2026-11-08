@@ -6,13 +6,14 @@ temperature: 0.1
 steps: 40
 permission:
   bash:
-    "*": deny
-    "npm run check": allow
-    "npm run typecheck": allow
-    "npm run lint": allow
-    "npm run test": allow
-    "npm test": allow
-    "npx vitest *": allow
+    "*": allow
+    "npm install*": deny
+    "npm uninstall*": deny
+    "git*": deny
+    "rm -rf*": deny
+    "sudo*": deny
+    "curl *": deny
+    "wget *": deny
   edit:
     "*": allow
     "*.md": deny

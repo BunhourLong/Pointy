@@ -29,6 +29,16 @@ export interface HandFrame {
 /** idle = pen up; drawing = pen down + hand visible; paused = pen down, hand lost. */
 export type PenState = 'idle' | 'drawing' | 'paused';
 
+export type ShapeKind = 'rectangle' | 'triangle' | 'circle';
+
+/** Fractions 0–1 of the frame as the USER sees it (screen space); convert to camera space at the edge. */
+export interface Region {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export type Command =
   | { type: 'draw' }
   | { type: 'stop' }
@@ -38,7 +48,12 @@ export type Command =
   | { type: 'color'; color: string }
   | { type: 'width'; width: number }
   | { type: 'thicker' }
-  | { type: 'thinner' };
+  | { type: 'thinner' }
+  | { type: 'shape'; kind: ShapeKind; region: Region }
+  | { type: 'move'; dx: number; dy: number; which: number } // fractions of frame; which: 1 = last shape, 2 = one before
+  | { type: 'resize'; factor: number; which: number } // scale about the shape's bbox center
+  | { type: 'recolor'; color: string; which: number }
+  | { type: 'remove'; which: number };
 
 /** point = index only extended; pinch = thumb on index, other fingers open (👌). */
 export type HandPose = 'open' | 'point' | 'fist' | 'pinch';
