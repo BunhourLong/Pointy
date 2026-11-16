@@ -72,6 +72,28 @@ Requirements on your machine: Node.js 20+, Chrome or Edge, webcam, mic, internet
 
 ---
 
+## Local speech model: Parakeet or your own (planned 2026-11-16, nothing built)
+
+Goal: a voice adapter that sends mic audio to a **local speech server** (default `nvidia/parakeet-unified-en-0.6b` on the user's Fedora box) instead of Vosk. Vosk stays the default fallback.
+
+**Shape:** Pointy stays browser-only. The adapter talks to any server that serves the OpenAI-compatible `POST /v1/audio/transcriptions` endpoint, so "your own model" just means a different `baseUrl` + `model`. One adapter covers Parakeet, whisper.cpp server, speaches, LocalAI, and LM Studio (if it ever ships STT). It needs no new npm dependency (it uses `fetch`, `FormData`, `AudioWorklet`/`ScriptProcessor`) and no core change: each speech segment = emit `listening`, then `onTranscript(text)`, which fits `VoiceInput` and resets `CommandDebouncer` as it does today.
+
+**Unverified (T0 settles these):** LM Studio has no documented speech-to-text endpoint (open request: lmstudio-ai/lms#320). `parakeet-unified-en-0.6b` officially runs through NeMo (Python). An ONNX/OpenAI-compatible wrapper exists for `parakeet-tdt-0.6b` (achetronic/parakeet), but no wrapper was found for the unified model.
+
+| # | Task | Depends on | Files owned | Done when |
+|---|---|---|---|---|
+| T0 | **Spike (main session + user, no repo code):** get a Parakeet server on Fedora serving `/v1/audio/transcriptions`. Neither LM Studio nor Ollama does speech-to-text, so use a dedicated server. Start with a ready-made OpenAI-compatible Parakeet server (e.g. achetronic/parakeet, ONNX, CPU OK, `parakeet-tdt-0.6b`). Switch to `parakeet-unified-en-0.6b` via NeMo + a small FastAPI wrapper only if T1 shows a need. Run it on the **CPU** so the 8 GB GPU (RTX 5060) stays free for the Ollama LLM. Check CORS for `http://localhost:5173` and the latency of a 1 s clip, then the same with Ollama loaded (`ollama ps`, `nvidia-smi`). | none | none (notes in MEMORY.md) | `curl -F file=@draw.wav -F model=… http://<host>:<port>/v1/audio/transcriptions` returns `draw`, and latency is recorded |
+| T1 | **Accuracy bench:** `scripts/asr-bench.ts` (Node 20, built-in `fetch`/`FormData`) sends each clip in `tests/fixtures/asr/*.wav` to an endpoint, runs the text through the existing `parseCommands`, and prints command accuracy, false triggers and latency p50/p95. The user records ~30 clips (each command word, plus noise and non-command speech). | T0 | `scripts/asr-bench.ts`, `tests/fixtures/asr/`, a `package.json` script | Prints a table for Parakeet; the same run against a second endpoint/model gives a comparison; `npm run check` passes |
+| T2 | **Adapter:** `input/voice/HttpTranscriptionVoiceInput.ts`: mic → energy-gate segmenter (thresholds in config) → 16 kHz mono WAV → POST → transcript. Statuses: `loading`/`listening`/`network`/`no-mic`. Pure WAV encoder + segmenter tested in Vitest. `config.voice.server = { enabled, baseUrl, model }`; main.ts picks the adapter. | T0 | `src/input/voice/HttpTranscriptionVoiceInput.ts`, its helpers + tests, `src/config.ts` (voice.server), `src/main.ts` (adapter choice) | Draw/stop/colors work by voice through Parakeet in the browser; server down → status + Vosk/Hand fallback; `npm run check` passes |
+| T3 | **Model picker in the app:** a toolbar setting for server URL plus a model dropdown filled from `GET /v1/models`, saved in localStorage (with Vosk as an option). | T2 | `src/ui/Controls.ts`, `index.html`, `src/main.ts` | Switching models takes effect without a reload; a bad URL shows a status and keeps the old model |
+| T4 | **Docs (main session):** README section "Local speech model": run Parakeet on Fedora, point Pointy at it, use your own model (any OpenAI-compatible STT server), run the bench. Replace "Run" voice text accordingly. | T2 (config names), T5 if done | `README.md` | The steps work as written on a clean Fedora box |
+| T5 | **Fedora setup script (optional):** `scripts/setup-parakeet.sh` creates a venv, installs the server from T0, pulls the model from Hugging Face (or `MODEL=<hf-id>` for another one), and starts it with CORS set. | T0 | `scripts/setup-parakeet.sh` | One command on Fedora goes from nothing to a working endpoint |
+| — | **Not planned: one-click "download a model" inside the app (like T3 Code).** A browser page can't install or launch a native Python/GPU server. That needs either a local helper daemon (a backend, which breaks "no backend") or running the model in the browser via WASM/ONNX (a new dependency and a ~600 MB+ download per visit cache, too heavy for 0.6B). T3 (pick from what the server has) plus T5 (script downloads it) cover the need. | | | |
+
+Order: T0, then T1 ∥ T2 (no shared files), then T3, then T4 (T5 any time after T0).
+
+---
+
 ## Prompts for Claude Code
 
 **Phase 0:**

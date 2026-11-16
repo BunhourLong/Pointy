@@ -1,0 +1,62 @@
+# MEMORY.md — Pointy
+
+Running context across sessions. Read at session start, update at the end of each phase.
+Keep entries short and dated (YYYY-MM-DD). Record decisions, gotchas, and deviations from `CLAUDE.md`, not things the code or git history already shows.
+
+## Current status
+- **Phase:** Phases 0–5 done and committed (2026-10-12). Phases 3–5 were done in one go at the user's request; none manually browser-tested yet.
+- **Next step:** user does a manual test in Chrome; then "Later" items in PLAN.md (eraser, Vosk, …).
+- 2026-10-12: Post-P5 rework after user testing (voice inaccurate, pinch-draw unreliable): hand gestures + voice tuning. Uncommitted until user tests.
+- 2026-11-05: AI workflow set up for opencode + GLM 5.3 Flash: `.opencode/agents/` (scout, builder, reviewer, pentester, quality, test-auditor), `.opencode/command/` (/implement, /fix, /review, /tests, /phase), visible subagent dispatch via `scripts/battery.sh` (cmux split opens mid-run and streams the live session; split + per-job serve close with the script; server temp dir removed on exit). Global coding principles: `~/.agents/AGENTS.md` (symlinked into `~/.config/opencode/AGENTS.md`, imported by `~/.claude/CLAUDE.md`). Requires an opencode restart to load. 200k context cap per session — orchestrator passes paths/diffs, battery subagents verify in fresh contexts.
+
+## Decisions
+- 2026-10-12: All code implementation is test-first and simplest-thing-that-works (apply inline — no `tdd` skill is installed; `ponytail` exists as a skill).
+- 2026-10-12: Project renamed from AirDraw to **Pointy** (name was taken). Use "Pointy" / `pointy` for package name, page title, etc.
+- 2026-10-12: Markdown docs (`CLAUDE.md`, `GOAL.md`, `PLAN.md`, `MEMORY.md`) are git-ignored; they're local working notes. 2026-11-16: superseded: README, GOAL, PLAN, CLAUDE, AGENTS and MEMORY are all committed so the Fedora AI PC gets the plan and notes via `git pull`; other `*.md` stay ignored.
+
+- 2026-10-12: Strokes are stored in normalized, unmirrored landmark space; `render/coords.ts` maps to px at draw time (resize-safe, mirroring stays in one place).
+- 2026-10-12: Pen states: `idle` = pen up, `drawing` = pen down + hand visible, `paused` = pen down + hand lost. A stroke opens on the first `move()` after pen-down.
+- 2026-10-12: Added a `toggle` Command (keyboard Space) so KeyboardInput doesn't need pen state.
+- 2026-10-12: Renderer redraws the committed layer only when `StrokeStore.version` changes (no extra event).
+- 2026-10-12: `README.md` is un-ignored (`!README.md`) so it gets committed; other .md files stay ignored.
+
+- 2026-10-12 (P3): `parseCommands` returns **all** commands in a transcript (not `Command | null`). `CommandDebouncer` is count-based, not time-based: it emits only commands beyond those already emitted for the current recognition session (interim transcripts re-send earlier words). Reset on voice status `listening` (fires on every recognizer restart). `debounceMs` removed from config.
+- 2026-10-12 (P3): `VoiceInput.onTranscript(text)` gets the full session transcript (all results joined), no `isFinal`.
+- 2026-10-12 (P3): `StrokeStore` takes an injectable clock (`now`, default `performance.now`) to timestamp points for `trimRecent`; times kept in a private parallel array, not on `Point`. Trim keeps the first point. Only a voice `stop` trims (keyboard emits `toggle`).
+
+- 2026-10-12 (P4): Pinch ratio is measured in true proportions: `PinchDetector.update(landmarks, aspect)` scales x by video width/height (landmarks are normalized per axis).
+- 2026-10-12 (P4): Mode is a bus event (`mode: 'voice' | 'pinch'`). Pinch mode stops the recognizer; App drives `pen.down/up` from the pinch directly (no commands, so no stop-trim). Any mode change lifts the pen. Mode toggle markup lives in `index.html`; `Controls` only binds it.
+
+- 2026-10-12 (P5): `drawStroke` lives in `render/drawStroke.ts`; `PngExporter` gets it injected from main (export/ must not import render/). Export = strokes only, transparent background, at video resolution.
+- 2026-10-12 (P5): Added `width` command (toolbar slider) and a `pen:style` bus event App emits after any color/width change so the toolbar follows voice commands.
+- 2026-10-12 (P5): App auto-saves to `DrawingRepository` whenever `store.version` changes and restores on start (`StrokeStore.load`). LocalStorageRepository validates stroke shape on load. Onboarding is a native `<dialog>` in index.html, shown until dismissed once (`pointy:onboarded`).
+- 2026-10-12 (P5): No coverage tool installed (`@vitest/coverage-v8` would be a new dependency); `core/` coverage reviewed by hand: every public method of every core module has tests.
+
+- 2026-10-12 (gestures): **Pinch mode replaced by Hand mode** (`InputMode = 'voice' | 'hand'`): ☝️ point (index only) = pen down, anything else = pen up. Gestures in both modes: ✊ fist = eraser (splits strokes), 👌 pinch with ≥2 of middle/ring/pinky open = grab. User chose pinch-to-grab because fist and grab would collide. `PinchDetector` deleted; `core/gestures/handPose.ts` classifies on MediaPipe **world** (3D, metric) landmarks, so rotation/foreshortening don't break it; `HandFrame.world` added.
+- 2026-10-12 (gestures): Grab picks up "the drawing" = the stroke within `grabRadius` (segment distance) + every stroke whose bbox overlaps it (user's choice over single stroke). Release over `config.trash` (screen space, bottom-right, shown only while holding) deletes. Erase/move are not undoable.
+- 2026-10-12 (gestures): Cursor anchor per pose (`config.gesture.anchors`); the One Euro filter resets when the anchor changes, otherwise fist→point would draw a line from knuckle to fingertip. Leaving the draw pose trims `releaseTrimMs` (finger moves while curling). Auto-save throttled to `storage.throttleMs` since erase/drag change the drawing every frame.
+- 2026-10-12 (voice): User reported voice still dead with no `heard:` line → recognizer returned nothing. Adapter used to swallow `no-speech` and `start()` exceptions, so a silent mic (macOS Privacy → Microphone, wrong input device) looked like "listening" forever. Now `VoiceStatus` has `no-speech` / `no-mic` / `network`, and main.ts shows a plain-language fix under the status bar (persists across auto-restarts). Root cause still unconfirmed, waiting on what the hint says.
+- 2026-10-12 (voice): Keyword lists include common Chrome mishearings (drew, raw, top, stopped, …); `stopTrimMs` 300 → 500; overlay shows the last words heard. Not done: Chrome `phrases` biasing (on-device only, may error on cloud recognition) and audio-onset-based stop trimming.
+
+- 2026-10-12 (voice): Root cause of "voice doesn't work" was **Brave** (has `webkitSpeechRecognition` but blocks Google's service). User approved new dep **`vosk-browser@0.0.8`** (Apache-2.0, last release 2022): `VoskVoiceInput` is now the voice adapter in main.ts for every browser; `WebSpeechVoiceInput` kept for swapping back. Grammar = `commandWords(vocab)` + `"[unk]"`. Chrome mishearing variants removed from keywords again (grammar makes them unnecessary; short words add false triggers).
+- 2026-10-12 (voice): Vosk model = `vosk-model-small-en-us-0.15.tar.gz` from ccoreilly.github.io (CORS `*`, 41 MB), cached by the library in IndexedDB keyed by URL. Package is lazy-loaded (`import()`, ~5.8 MB chunk → expected Vite chunk-size warning).
+- 2026-10-12 (voice): Verified end-to-end in headless Brave: WAV via a stand-in `getUserMedia` stream → "draw/stop/red/undo" each emitted once, "hello there" → `[unk]`. Without grammar the model heard "straw"/"read". Real-mic test still pending (user).
+
+## Gotchas / deviations from docs
+- 2026-11-05: In agent frontmatter, `bash: {"*": deny, ...allows}` — the deny-all wins and blocks even allowed commands (builder got nothing executed). Use `"*": allow` + specific denies instead.
+- 2026-11-05 (opencode): `opencode run --agent X` ignores `mode: subagent` agents — it prints a "Falling back to default agent" warning into the job's `.err` and runs everything as the default agent. Battery agents use `mode: all`. When a battery job misbehaves, check `scan/ai-<role>.err` for that warning.
+- 2026-11-05: `.opencode/**/*.md` is un-ignored in `.gitignore` (agent/command definitions ship with the repo); other `*.md` stays ignored as local working notes.
+- 2026-10-12 (voice): vosk-browser `createModel()` never settles if the download fails (worker sends `error`, not `load`) → `loadModel()` listens for both. Headless Chromium `--use-file-for-fake-audio-capture` delivered pure silence on macOS; test with a MediaStreamDestination stand-in instead (and loop it: the model loads after the clip would end). Headless Brave restores old tabs from a reused `--user-data-dir` → duplicated logs; use a fresh profile.
+- 2026-10-12 (voice): Vosk `AudioContext` may start `suspended` (autoplay policy, no click yet) → status `suspended`, resumes on first pointerdown/keydown.
+- 2026-10-12: Scaffold came with Vite 8 + TypeScript 6 + `erasableSyntaxOnly`, so no constructor parameter properties or enums.
+- 2026-10-12: WASM URL pinned to `@mediapipe/tasks-vision@1.1.0` (the installed version) instead of the unversioned URL in the docs. Bump it together with the package.
+- 2026-10-12: MediaPipe tracker tries the GPU delegate and falls back to CPU.
+- 2026-10-12 (P3): TS 6 lib.dom has SpeechRecognition event types but no constructor; `WebSpeechVoiceInput` declares a minimal local `Recognition` interface.
+- 2026-10-12: `tests/render/coords.test.ts` tests a pure render helper (outside core) because it guards the mirroring.
+
+- 2026-10-12 (P4): `unsupported` voice status fires synchronously inside `voice.start()` (mid `mode` emit), so the pinch fallback emit is deferred with `queueMicrotask`, otherwise later `mode` handlers see the stale `voice`.
+
+## Open questions
+- 2026-11-16 (local STT, planned, nothing built): User wants `nvidia/parakeet-unified-en-0.6b` (local, Fedora, "LM Studio format") as the voice model, plus a way to use their own model. Plan = PLAN.md "Local speech model" T0–T5: one adapter for any OpenAI-compatible `/v1/audio/transcriptions` server. Neither LM Studio (lms#320) nor Ollama serves STT, so the plan is a dedicated server: start with a ready-made ONNX Parakeet TDT server; use unified via NeMo only if the T1 bench justifies it. Ollama stays for the planned LLM step.
+- 2026-11-16: AI PC spec per user: **RTX 5060 8 GB, 16 GB RAM, Fedora, i5 12th/13th gen** (older notes and README say RTX 4060 / Windows setup steps: outdated, fix in T4). Plan: LLM (Ollama default 4-bit, ~6 GB for a 9B model) gets the GPU; Parakeet runs on CPU (ONNX) so the two don't fight over 8 GB VRAM. Blackwell needs NVIDIA driver 570+. In-app one-click download was pushed back (needs a backend). Worker routing for run-task: the project mandates GLM 5.3 Flash via `scripts/battery.sh`, but delikit dispatches through native subagents, so ask the user before dispatching.
+- 2026-10-12 (AI voice, planned, nothing built): User wants push-to-talk free-form commands ("draw a rectangle top left, move it a bit right") interpreted by an LLM. Decided: self-hosted Ollama on a separate LAN PC (RTX 4060 8 GB, 16 GB RAM), model `qwen3.5:9b` (fits VRAM; 31B rejected as too slow with CPU offload), one OpenAI-compatible adapter so hosted/Docker can swap in via `config.ts`. Setup steps + TODO live in README "AI voice commands". Open: push-to-talk key (proposed A + 🎤 button, not confirmed); verify `think: false` works through Ollama's `/v1` endpoint; model tags taken from web sources, not verified on ollama.com.

@@ -32,6 +32,7 @@ npm-debug.log*
 !README.md
 !GOAL.md
 !PLAN.md
+!MEMORY.md
 !CLAUDE.md
 !AGENTS.md
 !.opencode/**/*.md
