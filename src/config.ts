@@ -71,6 +71,28 @@ export const config = {
     lang: 'en-US',
     /** Web Speech only: delay before restarting recognition after an error (e.g. `network`). */
     errorRestartMs: 1000,
+    /**
+     * Local speech server with the OpenAI `/audio/transcriptions` API (Parakeet, whisper.cpp, …),
+     * used instead of Vosk. If it's unreachable, voice falls back to Vosk.
+     */
+    server: {
+      enabled: true,
+      baseUrl: 'http://localhost:5092/v1',
+      /** achetronic/parakeet ignores it (it serves one model); other servers need a real name. */
+      model: 'parakeet-tdt-0.6b',
+      sampleRate: 16000,
+      /** 64 ms chunks at 16 kHz: the segmenter's time resolution. */
+      bufferSize: 1024,
+      requestTimeoutMs: 5000,
+      segmenter: {
+        /** Mic RMS (0–1) that counts as speech; raise it in a noisy room. */
+        threshold: 0.01,
+        silenceMs: 300,
+        minSpeechMs: 100,
+        maxSegmentMs: 5000,
+        preRollMs: 200,
+      },
+    },
     /** On "stop", drop points drawn in the last N ms (speech latency overshoot). */
     stopTrimMs: 500,
     // Also the recognizer's whole grammar: fewer, distinct words = fewer false triggers.
