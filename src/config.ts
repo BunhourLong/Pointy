@@ -77,7 +77,8 @@ export const config = {
      */
     server: {
       enabled: true,
-      baseUrl: 'http://localhost:5092/v1',
+      // Server on another machine: VITE_SPEECH_SERVER_URL in .env.local (git-ignored). `?.`: Node has no import.meta.env.
+      baseUrl: import.meta.env?.VITE_SPEECH_SERVER_URL ?? 'http://localhost:5092/v1',
       /** achetronic/parakeet ignores it (it serves one model); other servers need a real name. */
       model: 'parakeet-tdt-0.6b',
       sampleRate: 16000,
