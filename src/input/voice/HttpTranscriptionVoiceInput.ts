@@ -94,18 +94,27 @@ export class HttpTranscriptionVoiceInput implements VoiceInput {
 
     // ponytail: the browser resamples the mic to 16 kHz. Older Firefox can't connect a mic to a
     // context at another rate; resample in JS if Firefox support matters.
-    const ctx = new AudioContext({ sampleRate: this.o.sampleRate });
-    const audio: Audio = { stream, ctx };
-    const segmenter = new Segmenter(this.o.segmenter, ctx.sampleRate);
-    // ponytail: ScriptProcessorNode is deprecated but runs everywhere; move to AudioWorklet if it's removed.
-    const node = ctx.createScriptProcessor(this.o.bufferSize, 1, 1);
-    node.onaudioprocess = (e) => {
-      const segment = segmenter.push(e.inputBuffer.getChannelData(0));
-      if (segment) this.send(audio, encodeWav(segment, ctx.sampleRate));
-    };
-    ctx.createMediaStreamSource(stream).connect(node);
-    node.connect(ctx.destination); // a ScriptProcessor only runs while connected to an output
-    this.audio = audio;
+    let ctx: AudioContext | undefined;
+    try {
+      ctx = new AudioContext({ sampleRate: this.o.sampleRate });
+      const audio: Audio = { stream, ctx };
+      const rate = ctx.sampleRate;
+      const segmenter = new Segmenter(this.o.segmenter, rate);
+      // ponytail: ScriptProcessorNode is deprecated but runs everywhere; move to AudioWorklet if it's removed.
+      const node = ctx.createScriptProcessor(this.o.bufferSize, 1, 1);
+      node.onaudioprocess = (e) => {
+        const segment = segmenter.push(e.inputBuffer.getChannelData(0));
+        if (segment) this.send(audio, encodeWav(segment, rate));
+      };
+      ctx.createMediaStreamSource(stream).connect(node);
+      node.connect(ctx.destination); // a ScriptProcessor only runs while connected to an output
+      this.audio = audio;
+    } catch (err) {
+      console.warn('Voice audio could not start:', err);
+      stream.getTracks().forEach((t) => t.stop());
+      void ctx?.close();
+      return this.statusCb('error');
+    }
 
     // Autoplay policy: without a click on the page first, the AudioContext starts suspended.
     if (ctx.state === 'running') return this.statusCb('listening');
@@ -117,28 +126,38 @@ export class HttpTranscriptionVoiceInput implements VoiceInput {
     const body = new FormData();
     body.append('file', new Blob([wav], { type: 'audio/wav' }), 'speech.wav');
     body.append('model', this.o.model);
-    this.requests = this.requests.then(async () => {
-      if (this.audio !== audio) return; // stopped while queued
-      let status: VoiceStatus = 'listening';
-      try {
-        const res = await fetch(`${this.o.baseUrl}/audio/transcriptions`, {
-          method: 'POST',
-          body,
-          signal: AbortSignal.timeout(this.o.requestTimeoutMs),
-        });
-        if (!res.ok) {
-          console.warn('Transcription failed:', res.status, await res.text());
-          status = 'error';
-        } else {
-          const { text } = (await res.json()) as { text?: unknown };
-          if (this.audio === audio && typeof text === 'string') this.transcriptCb(text);
+    this.requests = this.requests
+      .then(async () => {
+        if (this.audio !== audio) return; // stopped while queued
+        let res: Response;
+        try {
+          res = await fetch(`${this.o.baseUrl}/audio/transcriptions`, {
+            method: 'POST',
+            body,
+            signal: AbortSignal.timeout(this.o.requestTimeoutMs),
+          });
+        } catch (err) {
+          // Only this means "server down": main.ts then switches to Vosk.
+          console.warn('Speech server unreachable:', err);
+          if (this.audio === audio) this.statusCb('network');
+          return;
         }
-      } catch (err) {
-        console.warn('Speech server unreachable:', err);
-        status = 'network';
-      }
-      if (this.audio === audio) this.statusCb(status);
-    });
+        let text: unknown;
+        try {
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+          ({ text } = (await res.json()) as { text?: unknown });
+          if (typeof text !== 'string') throw new Error('response has no "text" string');
+        } catch (err) {
+          console.warn('Transcription failed:', err);
+          if (this.audio === audio) this.statusCb('error');
+          return;
+        }
+        if (this.audio !== audio) return;
+        this.transcriptCb(text);
+        this.statusCb('listening');
+      })
+      // A throwing listener must not reject the chain, or every later phrase would be skipped.
+      .catch((err: unknown) => console.error('Voice transcript handler failed:', err));
   }
 
   private resume = (): void => {
