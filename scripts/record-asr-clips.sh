@@ -9,13 +9,14 @@ dir=tests/fixtures/asr
 mic=${MIC:-MacBook Pro Microphone}
 secs=${SECS:-2}
 # Command clips (2-3 takes each) + clips that must NOT trigger anything ("drawing" ≠ "draw").
-clips=(${@:-
+clips=($@)
+(( $# )) || clips=(
   draw-1 draw-2 draw-3 stop-1 stop-2 stop-3 clear-1 clear-2 undo-1 undo-2
   thicker-1 thicker-2 thinner-1 thinner-2 red-1 red-2 blue-1 blue-2 green-1 black-1 white-1
   draw-red-1 stop-blue-1
   hello-there-1 what-time-is-it-1 i-am-drawing-a-picture-1 the-stopwatch-is-broken-1
   silence-1 cough-1 tap-the-desk-1
-})
+)
 cd "${0:A:h}/.."
 mkdir -p $dir
 for clip in $clips; do
