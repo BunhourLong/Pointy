@@ -16,7 +16,7 @@ const HELP = `Record clips into the folder, named after what you say, plus an op
   draw-1.wav, stop-2.wav, color-red-1.wav, thicker-1.wav, hello-there-1.wav, noise-1.wav
 Clips whose name holds no command word (noise, small talk) count as false-trigger checks.
 Record ~30: each command word 2-3 times, some colors, plus noise, silence and non-command speech.
-Fedora: arecord -f S16_LE -r 16000 -c 1 -d 2 tests/fixtures/asr/draw-1.wav`;
+Mac: scripts/record-asr-clips.sh (prompts for each clip). Fedora: arecord -f S16_LE -r 16000 -c 1 -d 2 tests/fixtures/asr/draw-1.wav`;
 
 const { values } = parseArgs({
   options: {
